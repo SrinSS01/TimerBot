@@ -83,45 +83,54 @@ func (t *TimerCommand) Execute(session *discordgo.Session, interaction *discordg
 		})
 		return
 	}
-	endDate := startDate.Add(durationHours)
-	now := time.Now()
-	startDiff := startDate.Sub(now)
-	time.Sleep(startDiff - (time.Minute * 5))
-	ticker := time.NewTicker(1 * time.Second)
-	go func() {
-		for range ticker.C {
-			_, _ = session.ChannelMessageSend(interaction.ChannelID, "@everyone")
-		}
-	}()
-	time.Sleep(time.Minute * 5)
-	ticker.Stop()
 	_ = session.InteractionRespond(interaction.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Embeds: []*discordgo.MessageEmbed{
-				{
-					Fields: []*discordgo.MessageEmbedField{
-						{
-							Name:  "Username",
-							Value: fmt.Sprintf("%s [ `%d` days ]", user.Mention(), durationDays),
-						},
-						{
-							Name:  "Time left",
-							Value: fmt.Sprintf("<t:%d:R>", endDate.Unix()),
-						},
-						{
-							Name:  "Date Started",
-							Value: fmt.Sprintf("<t:%d:d>", startDate.Unix()),
-						},
-						{
-							Name:  "Date Finished",
-							Value: fmt.Sprintf("<t:%d:d>", endDate.Unix()),
-						},
-					},
-				},
-			},
+			Flags:   discordgo.MessageFlagsEphemeral,
+			Content: "⏱️ Scheduled",
 		},
 	})
-	//time.Sleep(durationHours)
-	//ticker.Stop()
+	now := time.Now()
+	endDate := startDate.Add(durationHours)
+	startDiff := startDate.Sub(now)
+	go func() {
+		announceTime := endDate.Sub(now) - (5 * time.Minute)
+		time.AfterFunc(announceTime, func() {
+			ticker := time.NewTicker(1 * time.Second)
+			go func() {
+				for range ticker.C {
+					_, _ = session.ChannelMessageSend(interaction.ChannelID, "@everyone")
+				}
+			}()
+			time.AfterFunc(5*time.Minute, func() {
+				ticker.Stop()
+				time.Sleep(1 * time.Second)
+				_, _ = session.ChannelMessageSendEmbed(interaction.ChannelID, &discordgo.MessageEmbed{
+					Description: fmt.Sprintf("%s got released", user.Mention()),
+				})
+			})
+		})
+	}()
+	time.AfterFunc(startDiff, func() {
+		_, _ = session.ChannelMessageSendEmbed(interaction.ChannelID, &discordgo.MessageEmbed{
+			Fields: []*discordgo.MessageEmbedField{
+				{
+					Name:  "Username",
+					Value: fmt.Sprintf("%s [ `%d` days ]", user.Mention(), durationDays),
+				},
+				{
+					Name:  "Time left",
+					Value: fmt.Sprintf("<t:%d:R>", endDate.Unix()),
+				},
+				{
+					Name:  "Date Started",
+					Value: fmt.Sprintf("<t:%d:d>", startDate.Unix()),
+				},
+				{
+					Name:  "Date Finished",
+					Value: fmt.Sprintf("<t:%d:d>", endDate.Unix()),
+				},
+			},
+		})
+	})
 }
