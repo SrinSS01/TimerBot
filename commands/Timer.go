@@ -45,7 +45,7 @@ func (t *TimerCommand) Execute(session *discordgo.Session, interaction *discordg
 	user := data.Options[0].UserValue(session)
 	startDateVal := data.Options[1].StringValue()
 	durationDays := data.Options[2].IntValue()
-	durationHours := time.Duration(durationDays) * time.Hour * 24
+	durationHours := time.Duration(durationDays) * 24 * time.Hour
 	matcher := regex.FindStringSubmatch(startDateVal)
 	if len(matcher) == 0 {
 		_ = session.InteractionRespond(interaction.Interaction, &discordgo.InteractionResponse{
