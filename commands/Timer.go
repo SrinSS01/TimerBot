@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/bwmarrin/discordgo"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -93,34 +94,20 @@ func (t *TimerCommand) Execute(session *discordgo.Session, interaction *discordg
 	now := time.Now()
 	endDate := startDate.Add(durationHours)
 	startDiff := startDate.Sub(now)
-	go func() {
-		announceTime := endDate.Sub(now) - (5 * time.Minute)
-		time.AfterFunc(announceTime, func() {
-			ticker := time.NewTicker(1 * time.Second)
-			go func() {
-				for range ticker.C {
-					_, _ = session.ChannelMessageSend(interaction.ChannelID, "@everyone")
-				}
-			}()
-			time.AfterFunc(5*time.Minute, func() {
-				ticker.Stop()
-				time.Sleep(1 * time.Second)
-				_, _ = session.ChannelMessageSendEmbed(interaction.ChannelID, &discordgo.MessageEmbed{
-					Description: fmt.Sprintf("%s got released", user.Mention()),
-				})
-			})
-		})
-	}()
 	time.AfterFunc(startDiff, func() {
-		_, _ = session.ChannelMessageSendEmbed(interaction.ChannelID, &discordgo.MessageEmbed{
+		embed := discordgo.MessageEmbed{
 			Fields: []*discordgo.MessageEmbedField{
 				{
 					Name:  "Username",
 					Value: fmt.Sprintf("%s [ `%d` days ]", user.Mention(), durationDays),
 				},
 				{
-					Name:  "Time left",
-					Value: fmt.Sprintf("<t:%d:R>", endDate.Unix()),
+					Name:  "Time Passed",
+					Value: fmt.Sprintf("%s", time.Now().Sub(startDate)),
+				},
+				{
+					Name:  "Time Left",
+					Value: fmt.Sprintf("%s", endDate.Sub(time.Now())),
 				},
 				{
 					Name:  "Date Started",
@@ -131,6 +118,66 @@ func (t *TimerCommand) Execute(session *discordgo.Session, interaction *discordg
 					Value: fmt.Sprintf("<t:%d:d>", endDate.Unix()),
 				},
 			},
+		}
+		msg, _ := session.ChannelMessageSendEmbed(interaction.ChannelID, &embed)
+		ticker := time.NewTicker(1 * time.Second)
+		time.AfterFunc(durationHours, func() {
+			ticker.Stop()
 		})
+		go func() {
+			for range ticker.C {
+				passed := time.Now().Sub(startDate)
+				passedHrs := int(passed.Hours())
+				passedMins := int(passed.Minutes())
+				passedSecs := int(passed.Seconds())
+				builder := strings.Builder{}
+				if passedHrs > 0 {
+					builder.WriteString(fmt.Sprintf("`%d hrs`", passedHrs))
+				}
+				if passedMins > 0 {
+					builder.WriteString(fmt.Sprintf("`%d mins`", passedMins))
+				}
+				builder.WriteString(fmt.Sprintf("`%d secs`", passedSecs))
+				embed.Fields[1] = &discordgo.MessageEmbedField{
+					Name:  "Time Passed",
+					Value: builder.String(),
+				}
+				leftBuilder := strings.Builder{}
+				left := endDate.Sub(time.Now())
+				leftHrs := int(left.Hours())
+				leftMins := int(left.Minutes())
+				leftSecs := int(left.Seconds())
+				if leftHrs > 0 {
+					leftBuilder.WriteString(fmt.Sprintf("`%d hrs`", leftHrs))
+				}
+				if leftMins > 0 {
+					leftBuilder.WriteString(fmt.Sprintf("`%d mins`", leftMins))
+				}
+				leftBuilder.WriteString(fmt.Sprintf("`%d secs`", leftSecs))
+				embed.Fields[2] = &discordgo.MessageEmbedField{
+					Name:  "Time Left",
+					Value: builder.String(),
+				}
+				_, _ = session.ChannelMessageEditEmbed(msg.ChannelID, msg.ID, &embed)
+			}
+		}()
 	})
+	go func() {
+		announceTime := endDate.Sub(now) - (5 * time.Minute)
+		time.AfterFunc(announceTime, func() {
+			ticker := time.NewTicker(1 * time.Second)
+			go func() {
+				for range ticker.C {
+					_, _ = session.ChannelMessageSend(interaction.ChannelID, "@everyone")
+				}
+			}()
+			time.AfterFunc(5*time.Second, func() {
+				ticker.Stop()
+				time.Sleep(1 * time.Second)
+				_, _ = session.ChannelMessageSendEmbed(interaction.ChannelID, &discordgo.MessageEmbed{
+					Description: fmt.Sprintf("%s got released", user.Mention()),
+				})
+			})
+		})
+	}()
 }
